@@ -1,60 +1,71 @@
-# TWS Mode Controller
+# TWS BLE Probe
 
-A single-page BLE controller for **ODM TWS earbuds that ship without an app**.
-Lets you try switching ANC / Transparency / Off from the browser, over Web
-Bluetooth.
+A single-page BLE probe for **earbuds whose vendor never shipped a control app**.
+Enumerate GATT services, subscribe to notifications, and send raw hex — all from
+Chrome on Android.
 
-Live: https://qifani35.github.io/tws-controller/
+Live: **https://qifani35.github.io/tws-controller/**
 
-## Why this needs a discovery step first
+## Why a probe and not a "mode switcher"
 
-Cheap TWS earbuds are built on a handful of chipsets (BES, Jieli, Qualcomm,
-Actions). Many of them *do* expose a writable GATT characteristic that changes
-the ANC mode — the vendor just never shipped an app.
+Cheap TWS earbuds run on a handful of chipsets (BES, Jieli, Qualcomm, Actions,
+plus vendor-custom firmware like Audio-Technica's). Many expose a writable GATT
+characteristic that changes the listening mode — the vendor just ships no app.
 
-The problem: the service/characteristic UUIDs and the command bytes are
-**vendor-specific and undocumented**. There is no universal "ANC on" command.
-So the workflow is always: discover, then send.
+The service/characteristic UUIDs and command bytes are **vendor-specific and
+undocumented**. There is no universal "ANC on" command. So the tool is built to
+discover, not to assume.
 
 ## Usage
 
-1. **Discover** — install [nRF Connect](https://play.google.com/store/apps/details?id=no.nordicsemi.android.mcp)
-   on Android, connect to your earbuds, and look for a characteristic with
-   `Write` or `Write Without Response`.
-   Copy its **service UUID** and **characteristic UUID**.
-2. **Connect** — open the page in Chrome on Android, paste both UUIDs, and
-   press *Connect to earbuds*. If you leave the characteristic UUID empty the
-   tool lists every characteristic on the service so you can pick one.
-3. **Probe** — try the three mode buttons and watch the earbuds. The default
-   `01 00 / 01 01 / 01 02` triple is a common guess, not a standard.
+1. **Connect** — press *Connect to earbuds* and pick the device from the chooser.
+2. **Explore** — paste the service UUID(s), comma or newline separated, and press
+   *Explore services*. Every characteristic is listed with its properties
+   (`read` · `write` · `write-no-resp` · `notify` · `indicate`) plus per-characteristic
+   buttons.
+3. **Probe** — set a write target with *Use for write*, then send hex. `Read` and
+   `Subscribe` reveal what the earbuds report.
 
-Settings are stored in `localStorage`, so UUIDs survive a reload.
+## Finding the mode command
 
-## If nothing happens
+The reliable recipe:
 
-In rough order of likelihood:
+1. Press **Subscribe** on every characteristic that supports `notify`/`indicate`.
+2. Change the mode **by touching the earbuds**.
+3. Read the bytes that arrive in the log — that is your model's encoding.
+4. Replay exactly those bytes with **Send**.
+
+Starting guesses worth trying: `01 00`, `01 01`, `01 02`, `02 00`. If writes
+disconnect the earbuds, switch to *Write With Response* — some firmwares need it.
+
+## Where to get the service UUID
+
+Use [nRF Connect](https://play.google.com/store/apps/details?id=no.nordicsemi.android.mcp):
+connect to the earbuds, tap a service, and the UUID is shown at the top. Copy it
+into the *Services to explore* box.
+
+A UUID such as `8a22ac7d-7566-4bf3-9cc7-8e33e8c40ada` is a vendor-custom service —
+those are exactly the ones worth probing, because standard Bluetooth services do
+not carry vendor mode switches.
+
+## When nothing works
 
 | Symptom | Cause |
 |---|---|
-| No writable characteristic in nRF Connect | Firmware only accepts touch controls — not controllable by any app |
-| Characteristic is `Indicate`/`Notify` only | It reports state; the write goes elsewhere |
-| Writes succeed but mode never changes | Wrong command bytes for your chipset |
-| Earbuds disconnect on write | Some firmwares require a handshake/auth frame first |
-
-A `Notify`/`Indicate` characteristic is still useful: subscribe to it in nRF
-Connect, change the mode **by touch**, and watch which bytes the earbuds report.
-That reveals the encoding for your model.
+| No writable characteristic | Firmware only accepts touch controls — no app can change modes |
+| Only `notify`/`indicate` present | It reports state; the write path is elsewhere or absent |
+| Writes succeed, mode unchanged | Wrong command bytes for this chipset |
+| Disconnect on write | A handshake frame is required first, or use Write With Response |
+| Service UUID not found | The UUID is wrong, or the device only exposes it after a pairing/handshake |
 
 ## Requirements
 
-- Chrome or Edge on Android (Web Bluetooth is not available in Firefox or Safari)
-- Served over HTTPS or `localhost` — Web Bluetooth refuses insecure origins.
-  The GitHub Pages URL above satisfies this.
+- Chrome or Edge on **Android** (Web Bluetooth is absent in Firefox and Safari)
+- HTTPS or `localhost` — the GitHub Pages URL above satisfies this
 
 ## Privacy
 
-Everything happens in your browser. No server, no analytics, no network calls
-after the page loads. UUIDs and commands stay in your own `localStorage`.
+No server, no analytics, no network calls after load. Everything stays in the page.
 
 ## License
 
