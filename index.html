@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TWS Mode Controller</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #0f1115; color: #e6e8eb;
+    min-height: 100vh; padding: 1.2rem; font-size: 15px;
+  }
+  h1 { font-size: 1.2rem; margin-bottom: .3rem; }
+  .sub { color: #64748b; font-size: .8rem; margin-bottom: 1.2rem; }
+  .card {
+    background: #151920; border: 1px solid #232a35; border-radius: 10px;
+    padding: 1rem; margin-bottom: 1rem;
+  }
+  .card h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em;
+              color: #8b98a9; margin-bottom: .8rem; font-weight: 600; }
+  .field { display: flex; flex-direction: column; gap: .3rem; margin-bottom: .7rem; }
+  label { font-size: .75rem; color: #8b98a9; }
+  input, select {
+    background: #171b22; border: 1px solid #262d38; color: #e6e8eb;
+    padding: .55rem .7rem; border-radius: 7px; font-size: .85rem;
+    font-family: ui-monospace, monospace; width: 100%;
+  }
+  input:focus, select:focus { outline: none; border-color: #3b82f6; }
+  button {
+    background: #1f2733; border: 1px solid #2b3542; color: #e6e8eb;
+    padding: .6rem 1rem; border-radius: 8px; font-size: .88rem;
+    font-weight: 600; cursor: pointer; font-family: inherit; transition: .15s;
+  }
+  button:hover:not(:disabled) { background: #28313f; }
+  button.primary { background: #2563eb; border-color: #2563eb; width: 100%; padding: .8rem; }
+  button.primary:hover:not(:disabled) { background: #1d4ed8; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; }
+  .mode-btn { padding: 1.1rem .4rem; font-size: .82rem; line-height: 1.3; }
+  .mode-btn small { display: block; font-family: ui-monospace, monospace;
+                    font-size: .68rem; color: #64748b; margin-top: .3rem; }
+  .status { font-size: .8rem; padding: .6rem .8rem; border-radius: 7px;
+            background: #171b22; border: 1px solid #262d38; color: #8b98a9; }
+  .status.ok { border-color: #14532d; background: #0f1f14; color: #4ade80; }
+  .status.err { border-color: #7f1d1d; background: #1f0f0f; color: #f87171; }
+  #log {
+    background: #0b0e12; border: 1px solid #232a35; border-radius: 7px;
+    padding: .7rem; font-family: ui-monospace, monospace; font-size: .72rem;
+    color: #8b98a9; height: 160px; overflow-y: auto; white-space: pre-wrap;
+    line-height: 1.5;
+  }
+  .warn { font-size: .75rem; color: #fbbf24; line-height: 1.5;
+          background: #1f1a0b; border: 1px solid #78350f; border-radius: 7px; padding: .7rem; }
+  .note { font-size: .72rem; color: #64748b; line-height: 1.5; margin-top: .5rem; }
+</style>
+</head>
+<body>
+
+<h1>TWS Mode Controller</h1>
+<p class="sub">Generic BLE controller for earbuds with no official app</p>
+
+<div class="card">
+  <h2>1. Device</h2>
+  <button class="primary" id="connectBtn">Connect to earbuds</button>
+  <div class="status" id="status" style="margin-top:.7rem">Not connected</div>
+</div>
+
+<div class="card">
+  <h2>2. GATT target</h2>
+  <div class="warn">
+    UUIDs are vendor-specific. Find them with <b>nRF Connect</b> first: connect to the
+    earbuds, look for a characteristic with <b>Write</b> or <b>Write Without Response</b>.
+  </div>
+  <div class="field" style="margin-top:.8rem">
+    <label>Service UUID</label>
+    <input id="svcUuid" placeholder="0000fff0-0000-1000-8000-00805f9b34fb">
+  </div>
+  <div class="field">
+    <label>Characteristic UUID (writable)</label>
+    <input id="chrUuid" placeholder="0000fff1-0000-1000-8000-00805f9b34fb">
+  </div>
+  <div class="field">
+    <label>Write type</label>
+    <select id="writeType">
+      <option value="withoutResponse">Write Without Response (most common)</option>
+      <option value="withResponse">Write With Response</option>
+    </select>
+  </div>
+</div>
+
+<div class="card">
+  <h2>3. Mode commands (hex bytes)</h2>
+  <div class="field">
+    <label>Normal / ANC off</label>
+    <input id="cmdOff" placeholder="e.g. 01 00" value="01 00">
+  </div>
+  <div class="field">
+    <label>ANC on</label>
+    <input id="cmdAnc" placeholder="e.g. 01 01" value="01 01">
+  </div>
+  <div class="field">
+    <label>Transparency / ambient</label>
+    <input id="cmdAmb" placeholder="e.g. 01 02" value="01 02">
+  </div>
+  <div class="modes" style="margin-top:.4rem">
+    <button class="mode-btn" data-cmd="off" disabled>Off<small>—</small></button>
+    <button class="mode-btn" data-cmd="anc" disabled>ANC<small>—</small></button>
+    <button class="mode-btn" data-cmd="amb" disabled>Ambient<small>—</small></button>
+  </div>
+  <p class="note">
+    The defaults above are a guess — many chipsets use 0x01 0x00/0x01/0x02 but yours
+    may differ. Try each command and watch the earbuds; if nothing changes, the byte
+    layout is different and needs more probing.
+  </p>
+</div>
+
+<div class="card">
+  <h2>Log</h2>
+  <div id="log"></div>
+</div>
+
+<script>
+// --- element handles -------------------------------------------------------
+const $ = id => document.getElementById(id);
+let device = null;
+let characteristic = null;
+
+// --- logging ---------------------------------------------------------------
+function log(msg, kind = '') {
+  const el = $('log');
+  const line = document.createElement('div');
+  if (kind === 'err') line.style.color = '#f87171';
+  if (kind === 'ok') line.style.color = '#4ade80';
+  line.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(msg, kind = '') {
+  const el = $('status');
+  el.textContent = msg;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+// --- hex parsing -----------------------------------------------------------
+// Accepts "01 00", "0100", "0x01,0x02" and "01:02" — all become byte arrays.
+// The 0x prefixes are stripped first so "0x01,0x02" cannot be misread as
+// the digit sequence 001002.
+function parseHex(str) {
+  const withoutPrefixes = (str || '').replace(/0x/gi, ' ');
+  const cleaned = withoutPrefixes.replace(/[^0-9a-fA-F]/g, '');
+  if (cleaned.length === 0 || cleaned.length % 2 !== 0) return null;
+  const out = new Uint8Array(cleaned.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(cleaned.substr(i * 2, 2), 16);
+  }
+  return out;
+}
+
+function hexLabel(str) {
+  const b = parseHex(str);
+  return b ? Array.from(b).map(x => x.toString(16).padStart(2, '0')).join(' ') : '—';
+}
+
+// --- persistence -----------------------------------------------------------
+const FIELDS = ['svcUuid', 'chrUuid', 'writeType', 'cmdOff', 'cmdAnc', 'cmdAmb'];
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('tws_settings') || '{}');
+    FIELDS.forEach(f => { if (saved[f] !== undefined) $(f).value = saved[f]; });
+  } catch (_e) { /* corrupt storage: keep defaults */ }
+}
+
+function saveSettings() {
+  const data = {};
+  FIELDS.forEach(f => { data[f] = $(f).value; });
+  localStorage.setItem('tws_settings', JSON.stringify(data));
+  refreshModeLabels();
+}
+
+function refreshModeLabels() {
+  const map = { off: $('cmdOff').value, anc: $('cmdAnc').value, amb: $('cmdAmb').value };
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.querySelector('small').textContent = hexLabel(map[btn.dataset.cmd]);
+  });
+}
+
+// --- connection ------------------------------------------------------------
+async function connect() {
+  if (!('bluetooth' in navigator)) {
+    setStatus('Web Bluetooth not available — use Chrome on Android', 'err');
+    return;
+  }
+
+  const svc = $('svcUuid').value.trim();
+  if (!svc) {
+    setStatus('Enter the service UUID first', 'err');
+    return;
+  }
+
+  try {
+    setStatus('Opening chooser…');
+    // No namePrefix filter: ODM earbuds have wildly inconsistent names.
+    device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [svc],
+    });
+    log('Device: ' + (device.name || device.id));
+
+    device.addEventListener('gattserverdisconnected', () => {
+      characteristic = null;
+      setStatus('Disconnected', 'err');
+      setButtonsEnabled(false);
+      log('Disconnected', 'err');
+    });
+
+    setStatus('Connecting to GATT…');
+    const server = await device.gatt.connect();
+    log('GATT connected');
+
+    const service = await server.getPrimaryService(svc);
+    log('Service found: ' + svc);
+
+    const chr = $('chrUuid').value.trim();
+    if (!chr) {
+      // Without a characteristic UUID, list what the service exposes so the
+      // user can copy the right one out of the log.
+      const chars = await service.getCharacteristics();
+      log('Characteristics on this service:');
+      chars.forEach(c => log('  ' + c.uuid + '  [' + c.properties.writeWithoutResponse +
+        '] w=' + c.properties.write + ' wnr=' + c.properties.writeWithoutResponse));
+      setStatus('Pick a writable characteristic UUID from the log', 'err');
+      return;
+    }
+
+    characteristic = await service.getCharacteristic(chr);
+    const props = characteristic.properties;
+    if (!props.write && !props.writeWithoutResponse) {
+      setStatus('That characteristic is not writable', 'err');
+      log('Properties: write=' + props.write + ' wnr=' + props.writeWithoutResponse, 'err');
+      return;
+    }
+
+    setButtonsEnabled(true);
+    setStatus('Connected to ' + (device.name || 'device'), 'ok');
+    log('Characteristic ready: ' + chr, 'ok');
+    saveSettings();
+  } catch (e) {
+    setStatus(e.message, 'err');
+    log('ERROR ' + e.message, 'err');
+  }
+}
+
+function setButtonsEnabled(on) {
+  document.querySelectorAll('.mode-btn').forEach(b => { b.disabled = !on; });
+}
+
+// --- mode switching --------------------------------------------------------
+async function sendMode(which) {
+  if (!characteristic) { log('Not connected', 'err'); return; }
+
+  const field = { off: 'cmdOff', anc: 'cmdAnc', amb: 'cmdAmb' }[which];
+  const bytes = parseHex($(field).value);
+  if (!bytes) {
+    log('Invalid hex for "' + which + '"', 'err');
+    setStatus('Invalid hex command', 'err');
+    return;
+  }
+
+  const useResponse = $('writeType').value === 'withResponse';
+  try {
+    log('→ ' + which + ': ' + hexLabel($(field).value));
+    if (useResponse && characteristic.properties.write) {
+      await characteristic.writeValueWithResponse(bytes);
+    } else if (characteristic.properties.writeWithoutResponse) {
+      await characteristic.writeValueWithoutResponse(bytes);
+    } else {
+      await characteristic.writeValue(bytes);
+    }
+    log('Sent', 'ok');
+    setStatus('Command sent: ' + which, 'ok');
+  } catch (e) {
+    log('Write failed: ' + e.message, 'err');
+    setStatus(e.message, 'err');
+  }
+}
+
+// --- wiring ----------------------------------------------------------------
+$('connectBtn').onclick = connect;
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.onclick = () => sendMode(btn.dataset.cmd);
+});
+FIELDS.forEach(f => $(f).addEventListener('change', saveSettings));
+
+loadSettings();
+refreshModeLabels();
+log('Ready. Enter UUIDs from nRF Connect, then connect.');
+
+// Surface the HTTPS requirement early — Web Bluetooth needs a secure context.
+if (!window.isSecureContext) {
+  log('WARNING: Web Bluetooth needs HTTPS or localhost. On Android, either serve ' +
+      'this page over HTTPS or enable chrome://flags → "Insecure origins treated ' +
+      'as secure" and add this origin.', 'err');
+}
+</script>
+</body>
+</html>
